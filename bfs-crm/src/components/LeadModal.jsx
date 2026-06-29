@@ -1,158 +1,323 @@
-import { useMemo } from 'react'
-import { useLeads } from '../hooks/useLeads'
-import { STATUTS, SOURCES, OFFRES, MOTIFS_PERTE } from '../lib/constants'
+import { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
+import { STATUTS, SOURCES, OFFRES, CLOSERS, MOTIFS_PERTE } from '../lib/constants'
+import { useAuth } from '../hooks/useAuth'
 
-function StatRow({ label, value, pct, color }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ width: 180, fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>{label}</div>
-      <div style={{ flex: 1, height: 6, background: 'var(--bg3)', borderRadius: 3 }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color || 'var(--primary)', borderRadius: 3, transition: 'width 0.4s' }} />
-      </div>
-      <div style={{ width: 28, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{value}</div>
-    </div>
-  )
+const EMPTY = {
+  nom: '', prenom: '', email: '', telephone: '', instagram_contact: '',
+  statut: 'Nouveau lead', source: '', source_ads: '', offre_visee: 'Non défini',
+  ca_potentiel: '', closer_assigne: '', paiement_recu: false,
+  score_s1: '', score_s2: '', score_s3: '',
+  date_premier_contact: '', date_appel_preq: '', date_relance: '',
+  motif_perte: '', notes_closer: '',
 }
 
-function Section({ title, children }) {
+export default function LeadModal({ lead, onClose, onSave }) {
+  const { profile } = useAuth()
+  const isOwner = profile?.role === 'owner'
+  const isCloser = profile?.role === 'closer'
+
+  const [form, setForm]       = useState(EMPTY)
+  const [saving, setSaving]   = useState(false)
+  const [error, setError]     = useState('')
+
+  useEffect(() => {
+    if (lead) {
+      setForm({
+        nom:                  lead.nom || '',
+        prenom:               lead.prenom || '',
+        email:                lead.email || '',
+        telephone:            lead.telephone || '',
+        instagram_contact:    lead.instagram_contact || '',
+        statut:               lead.statut || 'Nouveau lead',
+        source:               lead.source || '',
+        source_ads:           lead.source_ads || '',
+        offre_visee:          lead.offre_visee || 'Non défini',
+        ca_potentiel:         lead.ca_potentiel || '',
+        closer_assigne:       lead.closer_assigne || '',
+        paiement_recu:        lead.paiement_recu || false,
+        score_s1:             lead.score_s1 ?? '',
+        score_s2:             lead.score_s2 ?? '',
+        score_s3:             lead.score_s3 ?? '',
+        date_premier_contact: lead.date_premier_contact || '',
+        date_appel_preq:      lead.date_appel_preq ? lead.date_appel_preq.slice(0, 16) : '',
+        date_relance:         lead.date_relance || '',
+        motif_perte:          lead.motif_perte || '',
+        notes_closer:         lead.notes_closer || '',
+      })
+    }
+  }, [lead])
+
+  function set(field, value) {
+    setForm(f => ({ ...f, [field]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+
+    // Validations
+    if (!form.nom.trim()) { setError('Le nom est requis.'); return }
+    if (form.statut === 'Nurture' && !form.date_relance) {
+      setError('La date de relance est obligatoire pour un lead en Nurture.'); return
+    }
+    if (form.statut === 'Perdu' && !form.motif_perte) {
+      setError('Le motif de perte est obligatoire.'); return
+    }
+
+    setSaving(true)
+    const payload = {
+      nom:                  form.nom.trim(),
+      prenom:               form.prenom.trim() || null,
+      email:                form.email.trim() || null,
+      telephone:            form.telephone.trim() || null,
+      instagram_contact:    form.instagram_contact.trim() || null,
+      statut:               form.statut,
+      source:               form.source || null,
+      source_ads:           form.source_ads.trim() || null,
+      offre_visee:          form.offre_visee,
+      ca_potentiel:         form.ca_potentiel !== '' ? Number(form.ca_potentiel) : null,
+      closer_assigne:       form.closer_assigne || null,
+      paiement_recu:        form.paiement_recu,
+      score_s1:             form.score_s1 !== '' ? Number(form.score_s1) : null,
+      score_s2:             form.score_s2 !== '' ? Number(form.score_s2) : null,
+      score_s3:             form.score_s3 !== '' ? Number(form.score_s3) : null,
+      date_premier_contact: form.date_premier_contact || null,
+      date_appel_preq:      form.date_appel_preq || null,
+      date_relance:         form.date_relance || null,
+      motif_perte:          form.motif_perte || null,
+      notes_closer:         form.notes_closer.trim() || null,
+    }
+
+    try {
+      await onSave(payload)
+      onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const scoreTotal = [form.score_s1, form.score_s2, form.score_s3]
+    .map(v => Number(v) || 0).reduce((a, b) => a + b, 0)
+
+  // Closer voit seulement statut, notes, motif perte
+  const readOnly = isCloser
+
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>{title}</h3>
-      {children}
-    </div>
-  )
-}
-
-export default function Stats() {
-  const { leads, loading } = useLeads()
-
-  const data = useMemo(() => {
-    const total = leads.length || 1
-
-    const byStatut = STATUTS.map(s => ({
-      label: s.label,
-      color: s.color,
-      count: leads.filter(l => l.statut === s.value).length,
-    }))
-
-    const bySource = SOURCES.map(s => ({
-      label: s,
-      count: leads.filter(l => l.source === s).length,
-    }))
-
-    const byOffre = OFFRES.map(o => ({
-      label: o,
-      count: leads.filter(l => l.offre_visee === o).length,
-    }))
-
-    const byCloser = [
-      { label: 'Sébastien', count: leads.filter(l => l.closer_assigne === 'Sébastien').length },
-      { label: 'Jérôme',    count: leads.filter(l => l.closer_assigne === 'Jérôme').length },
-    ]
-
-    const byMotif = MOTIFS_PERTE.map(m => ({
-      label: m,
-      count: leads.filter(l => l.motif_perte === m).length,
-    })).filter(m => m.count > 0)
-
-    const payesCount = leads.filter(l => l.paiement_recu).length
-    const caTotal    = leads.reduce((s, l) => s + (l.ca_potentiel || 0), 0)
-    const caPaye     = leads.filter(l => l.paiement_recu).reduce((s, l) => s + (l.ca_potentiel || 0), 0)
-
-    const scoresMoyens = ['score_s1', 'score_s2', 'score_s3'].map(k => {
-      const vals = leads.map(l => l[k]).filter(v => v != null)
-      return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—'
-    })
-
-    const scoreFinale = scoresMoyens.every(s => s !== '—')
-      ? (scoresMoyens.reduce((a, b) => a + parseFloat(b), 0) / 3).toFixed(1)
-      : '—'
-
-    return { byStatut, bySource, byOffre, byCloser, byMotif, payesCount, caTotal, caPaye, total: leads.length, scoresMoyens, scoreFinale }
-  }, [leads])
-
-  if (loading) return (
-    <div className="page-loader">
-      <span className="spinner" style={{ width: 32, height: 32 }} />
-    </div>
-  )
-
-  const max = (arr) => Math.max(...arr.map(a => a.count), 1)
-
-  return (
-    <div style={{ padding: 28, maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700 }}>Statistiques</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>Sur {data.total} leads au total</p>
-      </div>
-
-      {/* CA */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
-        {[
-          { label: 'CA pipeline total', value: `${data.caTotal.toLocaleString('fr-FR')} €` },
-          { label: 'CA encaissé', value: `${data.caPaye.toLocaleString('fr-FR')} €` },
-          { label: 'Paiements reçus', value: `${data.payesCount} / ${data.total}` },
-        ].map(k => (
-          <div key={k.label} className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{k.value}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <Section title="Par statut">
-        {data.byStatut.map(s => (
-          <StatRow key={s.label} label={s.label} value={s.count} pct={(s.count / max(data.byStatut)) * 100} color={s.color} />
-        ))}
-      </Section>
-
-      <Section title="Par source">
-        {data.bySource.filter(s => s.count > 0).map(s => (
-          <StatRow key={s.label} label={s.label} value={s.count} pct={(s.count / max(data.bySource)) * 100} />
-        ))}
-        {data.bySource.every(s => s.count === 0) && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Aucune donnée</p>}
-      </Section>
-
-      <Section title="Par offre visée">
-        {data.byOffre.map(o => (
-          <StatRow key={o.label} label={o.label} value={o.count} pct={(o.count / max(data.byOffre)) * 100} color="#A78BFA" />
-        ))}
-      </Section>
-
-      <Section title="Par closer">
-        {data.byCloser.map(c => (
-          <StatRow key={c.label} label={c.label} value={c.count} pct={(c.count / max(data.byCloser)) * 100} color="#2B5EC7" />
-        ))}
-      </Section>
-
-      {data.byMotif.length > 0 && (
-        <Section title="Motifs de perte">
-          {data.byMotif.map(m => (
-            <StatRow key={m.label} label={m.label} value={m.count} pct={(m.count / max(data.byMotif)) * 100} color="#DC2626" />
-          ))}
-        </Section>
-      )}
-
-      <Section title="Score PSC™">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-          {['S1 — Perception', 'S2 — Structure', 'S3 — Conversion'].map((label, i) => (
-            <div key={label} style={{ textAlign: 'center', padding: '16px', background: 'var(--bg3)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)' }}>
-                {data.scoresMoyens[i]}
-                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>/20</span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{label}</div>
-            </div>
-          ))}
-          <div style={{ textAlign: 'center', padding: '16px', background: 'var(--primary)22', border: '1px solid var(--primary)44', borderRadius: 'var(--radius)' }}>
-            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)' }}>
-              {data.scoreFinale}
-              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>/20</span>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Note finale</div>
-          </div>
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.7)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000, padding: 20,
+    }}>
+      <div style={{
+        background: 'var(--bg2)',
+        border: '1px solid var(--border)',
+        borderRadius: 14,
+        width: '100%',
+        maxWidth: 720,
+        maxHeight: '90vh',
+        overflow: 'auto',
+        padding: 28,
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>
+            {lead ? 'Modifier le lead' : 'Nouveau lead'}
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: '6px 8px' }}>
+            <X size={16} />
+          </button>
         </div>
-      </Section>
+
+        <form onSubmit={handleSubmit}>
+          {/* Section Identité */}
+          {!readOnly && (
+            <>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                Identité
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div className="form-group">
+                  <label>Nom *</label>
+                  <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Dupont" />
+                </div>
+                <div className="form-group">
+                  <label>Prénom</label>
+                  <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Jean" />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jean@email.com" />
+                </div>
+                <div className="form-group">
+                  <label>Téléphone</label>
+                  <input value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="+33 6 12 34 56 78" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Instagram / Contact URL</label>
+                  <input value={form.instagram_contact} onChange={e => set('instagram_contact', e.target.value)} placeholder="https://instagram.com/..." />
+                </div>
+              </div>
+              <hr className="divider" />
+            </>
+          )}
+
+          {/* Section Pipeline */}
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+            Pipeline
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div className="form-group">
+              <label>Statut</label>
+              <select value={form.statut} onChange={e => set('statut', e.target.value)}>
+                {STATUTS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            {!readOnly && (
+              <>
+                <div className="form-group">
+                  <label>Source</label>
+                  <select value={form.source} onChange={e => set('source', e.target.value)}>
+                    <option value="">— Choisir —</option>
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Source Ads (nom pub)</label>
+                  <input value={form.source_ads} onChange={e => set('source_ads', e.target.value)} placeholder="Ex : Video_Studio_V2" />
+                </div>
+                <div className="form-group">
+                  <label>Offre visée</label>
+                  <select value={form.offre_visee} onChange={e => set('offre_visee', e.target.value)}>
+                    {OFFRES.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>CA potentiel (€)</label>
+                  <input type="number" value={form.ca_potentiel} onChange={e => set('ca_potentiel', e.target.value)} placeholder="3500" min="0" />
+                </div>
+                <div className="form-group">
+                  <label>Closer assigné</label>
+                  <select value={form.closer_assigne} onChange={e => set('closer_assigne', e.target.value)}>
+                    <option value="">— Choisir —</option>
+                    {CLOSERS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ justifyContent: 'flex-end' }}>
+                  <label>Paiement reçu</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', paddingTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.paiement_recu}
+                      onChange={e => set('paiement_recu', e.target.checked)}
+                      style={{ width: 'auto', accentColor: 'var(--primary)' }}
+                    />
+                    <span style={{ color: 'var(--text-muted)' }}>Oui</span>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Motif perte (visible toujours si Perdu) */}
+          {form.statut === 'Perdu' && (
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Motif de perte *</label>
+              <select value={form.motif_perte} onChange={e => set('motif_perte', e.target.value)}>
+                <option value="">— Obligatoire —</option>
+                {MOTIFS_PERTE.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Date relance (visible si Nurture) */}
+          {form.statut === 'Nurture' && (
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Date de relance *</label>
+              <input type="date" value={form.date_relance} onChange={e => set('date_relance', e.target.value)} />
+            </div>
+          )}
+
+          {!readOnly && (
+            <>
+              <hr className="divider" />
+              {/* Score PSC */}
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                Score PSC™ (0–4 par dimension)
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 16 }}>
+                <div className="form-group">
+                  <label>S1 — Perception</label>
+                  <input type="number" min="0" max="20" value={form.score_s1} onChange={e => set('score_s1', e.target.value)} placeholder="0–20" />
+                </div>
+                <div className="form-group">
+                  <label>S2 — Structure</label>
+                  <input type="number" min="0" max="20" value={form.score_s2} onChange={e => set('score_s2', e.target.value)} placeholder="0–20" />
+                </div>
+                <div className="form-group">
+                  <label>S3 — Conversion</label>
+                  <input type="number" min="0" max="20" value={form.score_s3} onChange={e => set('score_s3', e.target.value)} placeholder="0–20" />
+                </div>
+                <div style={{
+                  background: 'var(--bg3)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  padding: '8px 14px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>/ 60</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>{scoreTotal}</div>
+                </div>
+              </div>
+
+              <hr className="divider" />
+              {/* Dates */}
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                Dates
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div className="form-group">
+                  <label>Date premier contact</label>
+                  <input type="date" value={form.date_premier_contact} onChange={e => set('date_premier_contact', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Date appel pré-qual (Calendly)</label>
+                  <input type="datetime-local" value={form.date_appel_preq} onChange={e => set('date_appel_preq', e.target.value)} />
+                </div>
+              </div>
+            </>
+          )}
+
+          <hr className="divider" />
+          {/* Notes closer */}
+          <div className="form-group" style={{ marginBottom: 20 }}>
+            <label>Notes closer</label>
+            <textarea
+              value={form.notes_closer}
+              onChange={e => set('notes_closer', e.target.value)}
+              placeholder="Objections, contexte, prochaines étapes..."
+              rows={4}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+
+          {error && (
+            <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} className="btn btn-ghost">Annuler</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : (lead ? 'Enregistrer' : 'Créer le lead')}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
