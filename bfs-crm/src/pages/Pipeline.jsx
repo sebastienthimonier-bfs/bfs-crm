@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, Download, Pencil, Trash2, ExternalLink, ChevronDown } from 'lucide-react'
+import { Plus, Search, Download, Pencil, Trash2, ExternalLink, ChevronDown, Users as UsersIcon } from 'lucide-react'
 import { useLeads } from '../hooks/useLeads'
 import { useAuth } from '../hooks/useAuth'
 import LeadModal from '../components/LeadModal'
@@ -184,7 +184,7 @@ export default function Pipeline() {
         </div>
       ) : leads.length === 0 ? (
         <div className="empty-state">
-          <Users size={40} />
+          <UsersIcon size={40} />
           <p>Aucun lead trouvé</p>
           {isOwner && (
             <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}>
