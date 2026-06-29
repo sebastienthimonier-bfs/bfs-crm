@@ -253,15 +253,15 @@ export default function LeadModal({ lead, onClose, onSave }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 16 }}>
                 <div className="form-group">
                   <label>S1 — Perception</label>
-                  <input type="number" min="0" max="4" value={form.score_s1} onChange={e => set('score_s1', e.target.value)} placeholder="0–4" />
+                  <input type="number" min="0" max="20" value={form.score_s1} onChange={e => set('score_s1', e.target.value)} placeholder="0–20" />
                 </div>
                 <div className="form-group">
                   <label>S2 — Structure</label>
-                  <input type="number" min="0" max="4" value={form.score_s2} onChange={e => set('score_s2', e.target.value)} placeholder="0–4" />
+                  <input type="number" min="0" max="20" value={form.score_s2} onChange={e => set('score_s2', e.target.value)} placeholder="0–20" />
                 </div>
                 <div className="form-group">
                   <label>S3 — Conversion</label>
-                  <input type="number" min="0" max="4" value={form.score_s3} onChange={e => set('score_s3', e.target.value)} placeholder="0–4" />
+                  <input type="number" min="0" max="20" value={form.score_s3} onChange={e => set('score_s3', e.target.value)} placeholder="0–20" />
                 </div>
                 <div style={{
                   background: 'var(--bg3)',
@@ -270,7 +270,7 @@ export default function LeadModal({ lead, onClose, onSave }) {
                   padding: '8px 14px',
                   textAlign: 'center',
                 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>/ 60</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>{scoreTotal}</div>
                 </div>
               </div>
