@@ -64,7 +64,11 @@ export default function Stats() {
       return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—'
     })
 
-    return { byStatut, bySource, byOffre, byCloser, byMotif, payesCount, caTotal, caPaye, total: leads.length, scoresMoyens }
+    const scoreFinale = scoresMoyens.every(s => s !== '—')
+      ? (scoresMoyens.reduce((a, b) => a + parseFloat(b), 0) / 3).toFixed(1)
+      : '—'
+
+    return { byStatut, bySource, byOffre, byCloser, byMotif, payesCount, caTotal, caPaye, total: leads.length, scoresMoyens, scoreFinale }
   }, [leads])
 
   if (loading) return (
@@ -129,14 +133,24 @@ export default function Stats() {
         </Section>
       )}
 
-      <Section title="Score PSC™ moyen">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <Section title="Score PSC™">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
           {['S1 — Perception', 'S2 — Structure', 'S3 — Conversion'].map((label, i) => (
             <div key={label} style={{ textAlign: 'center', padding: '16px', background: 'var(--bg3)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>{data.scoresMoyens[i]}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)' }}>
+                {data.scoresMoyens[i]}
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>/20</span>
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{label}</div>
             </div>
           ))}
+          <div style={{ textAlign: 'center', padding: '16px', background: 'var(--primary)22', border: '1px solid var(--primary)44', borderRadius: 'var(--radius)' }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)' }}>
+              {data.scoreFinale}
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>/20</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Note finale</div>
+          </div>
         </div>
       </Section>
     </div>
